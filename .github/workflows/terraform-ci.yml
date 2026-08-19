@@ -1,0 +1,83 @@
+name: "Terraform CI Pipeline"
+
+on:
+  push:
+    branches-ignore:
+      - 'main'
+  pull_request:
+    branches:
+      - 'main'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  security-and-secret-scan:
+    name: "Security & Secret Scanning"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy Scanner (Secrets & IaC Vulnerabilities)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          hide-shortcut-text: 'true'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+
+      - name: Run Checkov (IaC Security Scan)
+        uses: bridgecrewio/checkov-action@master
+        with:
+          framework: terraform
+          output_format: cli
+          soft_fail: true
+
+  terraform-ci:
+    name: "Terraform Init, Validate & Plan"
+    runs-on: ubuntu-latest
+    needs: security-and-secret-scan
+
+    defaults:
+      run:
+        working-directory: ./Environment/Dev
+
+    env:
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.0"
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
+
+      - name: Terraform Format Check
+        id: fmt
+        run: terraform fmt -check
+        continue-on-error: true
+
+      - name: Terraform Init
+        id: init
+        run: terraform init
+
+      - name: Terraform Validate
+        id: validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        id: plan
+        run: terraform plan -no-color -out=tfplan

@@ -8,6 +8,11 @@ resource_group = {
     name     = "dev-rg2"
     location = "eastus"
   }
+
+  rg3 = {
+    name     = "dev-rg3"
+    location = "westus"
+  }
 }
 
 storage_account = {
