@@ -11,7 +11,6 @@ module "storage_account" {
 }
 
 module "storage_container" {
-  depends_on = [module.storage_account]
-  source     = "../../module/azurerm_storage_container"
-  ctn        = var.storage_container
+  source = "../../module/azurerm_storage_container"
+  ctn    = var.storage_container
 }
